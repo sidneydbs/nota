@@ -723,6 +723,7 @@ function render(){
   });
   document.getElementById('hint').style.display = state.ideas.length>2?'none':'';
   if(typeof rzId!=='undefined' && rzId){ if(byId(rzId)) placeRz(); else exitRz(); }
+  if(typeof INTRO!=='undefined' && INTRO) introPop(); // animation d'ouverture en cours : on la reprend
   frame(performance.now());
 }
 
@@ -1756,22 +1757,43 @@ maybeRemind();
 setTimeout(checkAlerts,1200);
 requestAnimationFrame(loop);
 /* ---------- Animation d'ouverture « Bulles d'abord » ---------- */
+// Chaque bulle « pope » à son propre moment, dans un ordre aléatoire et à intervalles irréguliers.
+// Le calendrier est mémorisé par bulle : si l'écran est redessiné pendant l'animation
+// (iPhone : redimensionnement au lancement, vérification des alertes…), les nouvelles bulles
+// reprennent exactement où elles en étaient au lieu d'apparaître toutes d'un coup.
+var INTRO=null; // var : déjà lisible par render() avant cette ligne
+function introPop(){
+  if(!INTRO) return;
+  nodes.forEach((n,id)=>{
+    const g=n.el.querySelector('.glass'), d=INTRO.delay.get(id); if(!g||d==null||g._intro) return;
+    g._intro=1;
+    const a=g.animate([{opacity:0,transform:'scale(.15)'},{opacity:1,transform:'scale(1.09)',offset:.6},{opacity:1,transform:'scale(.98)',offset:.82},{opacity:1,transform:'scale(1)'}],
+      {duration:560,delay:d,easing:'cubic-bezier(.3,.7,.4,1)',fill:'backwards'});
+    a.startTime=INTRO.t0; INTRO.anims.push(a);
+  });
+}
 function playIntro(){
   if(document.getElementById('intro')) return;
   // voile noir placé entre la nébuleuse (dessous) et les bulles (dessus)
   const ov=document.createElement('div'); ov.id='intro'; ov.setAttribute('aria-hidden','true');
   document.getElementById('world').after(ov);
-  const anims=[], A=(el,k,o)=>{ const a=el.animate(k,Object.assign({easing:'cubic-bezier(.25,.1,.25,1)',fill:'backwards'},o)); anims.push(a); return a; };
-  // 1. les bulles s'allument une à une sur fond noir
-  [...document.querySelectorAll('#bubbles .glass')].slice(0,40).forEach((g,k)=>A(g,[{opacity:0,transform:'translateY(4px)'},{opacity:1,transform:'none'}],{duration:650,delay:100+Math.min(k,8)*150}));
-  // 2. puis la nébuleuse se révèle derrière elles
-  A(ov,[{opacity:1},{opacity:0}],{duration:900,delay:650,fill:'forwards'});
-  // 3. liens et boutons arrivent en douceur
-  A(document.getElementById('links'),[{opacity:0},{opacity:1}],{duration:600,delay:700});
-  ['find','gear','zoom','add','hint'].forEach(id=>{ const e=document.getElementById(id); if(e) A(e,[{opacity:0},{opacity:1}],{duration:600,delay:900}); });
-  let done=false; const end=()=>{ if(done) return; done=true; removeEventListener('pointerdown',skip,true); anims.forEach(a=>{ try{ a.finish(); }catch(_){} }); ov.remove(); };
+  // ordre aléatoire + écarts irréguliers (tantôt rapprochés, tantôt espacés)
+  const ids=state.ideas.map(i=>i.id); for(let i=ids.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [ids[i],ids[j]]=[ids[j],ids[i]]; }
+  const n=Math.min(ids.length,40), span=Math.min(1500,380+n*170), gaps=ids.slice(0,n).map(()=>Math.random()<.3?.15+Math.random()*.3:.6+Math.random()*1.4);
+  const tot=gaps.reduce((x,y)=>x+y,0)||1; let acc=0; const delay=new Map();
+  ids.forEach((id,k)=>{ if(k<n){ delay.set(id,Math.round(120+acc/tot*span)); acc+=gaps[k]; } else delay.set(id,120+span); });
+  const t0=document.timeline.currentTime, anims=[];
+  INTRO={t0,delay,anims};
+  const A=(el,k,o)=>{ const a=el.animate(k,Object.assign({easing:'cubic-bezier(.25,.1,.25,1)',fill:'backwards'},o)); a.startTime=t0; anims.push(a); return a; };
+  introPop();
+  // la nébuleuse se révèle derrière les bulles pendant qu'elles apparaissent
+  const vd=Math.round(span*.45)+250;
+  A(ov,[{opacity:1},{opacity:0}],{duration:1000,delay:vd,fill:'forwards'});
+  A(document.getElementById('links'),[{opacity:0},{opacity:1}],{duration:600,delay:vd+150});
+  ['find','gear','zoom','add','hint'].forEach(id=>{ const e=document.getElementById(id); if(e) A(e,[{opacity:0},{opacity:1}],{duration:600,delay:vd+300}); });
+  let done=false; const end=()=>{ if(done) return; done=true; removeEventListener('pointerdown',skip,true); INTRO=null; anims.forEach(a=>{ try{ a.finish(); }catch(_){} }); ov.remove(); };
   const skip=()=>end(); addEventListener('pointerdown',skip,true); // un toucher passe l'animation
-  setTimeout(end,1700);
+  setTimeout(end,Math.max(1700,vd+1100,120+span+600));
 }
 if(prefs.intro!==false && !reduce) playIntro();
 if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
