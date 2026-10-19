@@ -478,10 +478,9 @@ body.eco .glass{animation:none!important} /* pas de respiration ni d'apparition 
 @media (prefers-reduced-motion:reduce){
   .orb,#grain,.glass,#add::before{animation:none!important}
 }
-/* animation d'ouverture « Rideau » : un voile sombre au bord flou glisse vers le bas */
-#intro{position:fixed;left:0;top:0;right:0;height:100%;z-index:200;overflow:hidden;cursor:pointer}
+/* animation d'ouverture « Bulles d'abord » : voile noir entre la nébuleuse et les bulles */
+#intro{position:fixed;left:0;top:0;right:0;height:100%;z-index:1;background:#05050f;pointer-events:none}
 html.sa #intro{height:var(--appH,100lvh)}
-#intro .veil{position:absolute;left:0;right:0;top:-60%;height:160%;background:linear-gradient(180deg,rgba(7,7,26,0) 0%,#07071a 35%,#07071a 100%);will-change:transform}
 /* iPhone écran d'accueil : iOS annonce une hauteur trop courte → on couvre tout l'écran */
 html.sa,html.sa body{height:var(--appH,100lvh)}
 html.sa #world,html.sa #board,html.sa #overlay{inset:auto;top:0;left:0;right:0;height:var(--appH,100lvh)}
@@ -546,7 +545,7 @@ html.sa #world,html.sa #board,html.sa #overlay{inset:auto;top:0;left:0;right:0;h
     <button class="tg" id="statusTg" aria-label="Couleur selon l'avancement"></button>
   </div>
   <div class="pref switch">
-    <div>Animation d'ouverture<small>Rideau au lancement de l'app</small></div>
+    <div>Animation d'ouverture<small>Bulles d'abord, au lancement de l'app</small></div>
     <button class="tg" id="introTg" aria-label="Animation d'ouverture"></button>
   </div>
   <div class="pref switch">
@@ -1756,21 +1755,23 @@ render();
 maybeRemind();
 setTimeout(checkAlerts,1200);
 requestAnimationFrame(loop);
-/* ---------- Animation d'ouverture « Rideau » ---------- */
+/* ---------- Animation d'ouverture « Bulles d'abord » ---------- */
 function playIntro(){
   if(document.getElementById('intro')) return;
+  // voile noir placé entre la nébuleuse (dessous) et les bulles (dessus)
   const ov=document.createElement('div'); ov.id='intro'; ov.setAttribute('aria-hidden','true');
-  ov.innerHTML='<div class="veil"></div>'; document.body.appendChild(ov);
+  document.getElementById('world').after(ov);
   const anims=[], A=(el,k,o)=>{ const a=el.animate(k,Object.assign({easing:'cubic-bezier(.25,.1,.25,1)',fill:'backwards'},o)); anims.push(a); return a; };
-  // le voile glisse vers le bas et dévoile l'app de haut en bas (transform seul : fluide)
-  A(ov.firstChild,[{transform:'translateY(0)'},{transform:'translateY(105%)'}],{duration:1200,easing:'cubic-bezier(.55,0,.35,1)',fill:'forwards'});
-  // les bulles apparaissent en fondu, avec un tout petit glissement
-  [...document.querySelectorAll('#bubbles .glass')].slice(0,40).forEach((g,k)=>A(g,[{opacity:0,transform:'translateY(6px)'},{opacity:1,transform:'none'}],{duration:650,delay:350+Math.min(k,8)*90}));
-  A(document.getElementById('links'),[{opacity:0},{opacity:1}],{duration:600,delay:600});
-  ['find','gear','zoom','add','hint'].forEach(id=>{ const e=document.getElementById(id); if(e) A(e,[{opacity:0},{opacity:1}],{duration:600,delay:600}); });
-  let done=false; const end=()=>{ if(done) return; done=true; anims.forEach(a=>{ try{ a.finish(); }catch(_){} }); ov.remove(); };
-  ov.addEventListener('pointerdown',e=>{ e.stopPropagation(); end(); },true); // un toucher passe l'animation
-  setTimeout(end,1500);
+  // 1. les bulles s'allument une à une sur fond noir
+  [...document.querySelectorAll('#bubbles .glass')].slice(0,40).forEach((g,k)=>A(g,[{opacity:0,transform:'translateY(4px)'},{opacity:1,transform:'none'}],{duration:650,delay:100+Math.min(k,8)*150}));
+  // 2. puis la nébuleuse se révèle derrière elles
+  A(ov,[{opacity:1},{opacity:0}],{duration:900,delay:650,fill:'forwards'});
+  // 3. liens et boutons arrivent en douceur
+  A(document.getElementById('links'),[{opacity:0},{opacity:1}],{duration:600,delay:700});
+  ['find','gear','zoom','add','hint'].forEach(id=>{ const e=document.getElementById(id); if(e) A(e,[{opacity:0},{opacity:1}],{duration:600,delay:900}); });
+  let done=false; const end=()=>{ if(done) return; done=true; removeEventListener('pointerdown',skip,true); anims.forEach(a=>{ try{ a.finish(); }catch(_){} }); ov.remove(); };
+  const skip=()=>end(); addEventListener('pointerdown',skip,true); // un toucher passe l'animation
+  setTimeout(end,1700);
 }
 if(prefs.intro!==false && !reduce) playIntro();
 if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
