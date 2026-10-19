@@ -477,7 +477,17 @@ body.eco .glass{animation:none!important} /* pas de respiration ni d'apparition 
 @media (prefers-reduced-motion:reduce){
   .orb,#grain,.glass,#add::before{animation:none!important}
 }
+/* iPhone écran d'accueil : iOS annonce une hauteur trop courte → on couvre tout l'écran */
+html.sa,html.sa body{height:var(--appH,100lvh)}
+html.sa #world,html.sa #board,html.sa #overlay{inset:auto;top:0;left:0;right:0;height:var(--appH,100lvh)}
 </style>
+<script>(function(){ // détecte l'app installée et mesure la vraie hauteur de l'écran
+  var sa=navigator.standalone||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches); if(!sa) return;
+  var r=document.documentElement; r.classList.add('sa');
+  function fit(){ var port=innerHeight>=innerWidth, full=port?Math.max(screen.height,screen.width):Math.min(screen.height,screen.width);
+    r.style.setProperty('--appH',Math.max(innerHeight,full)+'px'); }
+  fit(); addEventListener('resize',fit); addEventListener('orientationchange',function(){ setTimeout(fit,300); });
+})();</script>
 </head>
 <body>
 <div id="world"><canvas id="sky"></canvas><div id="orbs">
@@ -776,7 +786,7 @@ void main(){
   sky={gl,uR:gl.getUniformLocation(pr,'R'),uT:gl.getUniformLocation(pr,'T'),uD:gl.getUniformLocation(pr,'D'),uP:gl.getUniformLocation(pr,'P'),
        last:-1e9,fps:30,dpr:1,acc:[]};
   function size(){
-    const cssW=innerWidth, cssH=innerHeight;
+    const cssW=skyCv.clientWidth||innerWidth, cssH=skyCv.clientHeight||innerHeight; // taille réelle du fond (écran entier sur iPhone)
     let dpr=Math.min(devicePixelRatio||1,3);
     const MAX=3840*2160; // plafond 4K
     if(cssW*cssH*dpr*dpr>MAX) dpr=Math.sqrt(MAX/(cssW*cssH));
