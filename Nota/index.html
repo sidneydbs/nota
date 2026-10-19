@@ -477,6 +477,12 @@ body.eco .glass{animation:none!important} /* pas de respiration ni d'apparition 
 @media (prefers-reduced-motion:reduce){
   .orb,#grain,.glass,#add::before{animation:none!important}
 }
+/* animation d'ouverture « Nébuleuse » */
+#intro{position:fixed;left:0;top:0;right:0;height:100%;z-index:200;background:#000;overflow:hidden;cursor:pointer}
+html.sa #intro{height:var(--appH,100lvh)}
+#intro i{position:absolute;border-radius:50%;background:#fff;box-shadow:0 0 6px rgba(255,255,255,.8)}
+#intro .wm{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:min(22vw,96px);font-weight:800;
+  letter-spacing:-.02em;color:#fff;text-shadow:0 0 34px rgba(170,150,255,.85),0 0 90px rgba(120,90,255,.5)}
 /* iPhone écran d'accueil : iOS annonce une hauteur trop courte → on couvre tout l'écran */
 html.sa,html.sa body{height:var(--appH,100lvh)}
 html.sa #world,html.sa #board,html.sa #overlay{inset:auto;top:0;left:0;right:0;height:var(--appH,100lvh)}
@@ -539,6 +545,10 @@ html.sa #world,html.sa #board,html.sa #overlay{inset:auto;top:0;left:0;right:0;h
   <div class="pref switch">
     <div>Couleur selon l'avancement<small>Rouge s'il reste des tâches, vert quand tout est fait</small></div>
     <button class="tg" id="statusTg" aria-label="Couleur selon l'avancement"></button>
+  </div>
+  <div class="pref switch">
+    <div>Animation d'ouverture<small>Nébuleuse au lancement de l'app</small></div>
+    <button class="tg" id="introTg" aria-label="Animation d'ouverture"></button>
   </div>
   <div class="pref switch">
     <div>Mode économie<small>Fige le fond et les bulles, préserve la batterie</small></div>
@@ -1710,7 +1720,7 @@ findIn.addEventListener('keydown',e=>{ if(e.key==='Enter'){ const b=findRes.quer
 findBtn.onclick=()=>{ togglePrefs(false); toggleFind(!findBox.classList.contains('open')); };
 
 /* ---------- Réglages d'apparence ---------- */
-const PREFKEY='bulles.prefs', DEF={op:50,bl:16,link:'fibre',eco:false,status:true,alerts:{auto:true,offs:[48,24,12,8]}};
+const PREFKEY='bulles.prefs', DEF={op:50,bl:16,link:'fibre',eco:false,status:true,intro:true,alerts:{auto:true,offs:[48,24,12,8]}};
 const prefsEl=document.getElementById('prefs'), gear=document.getElementById('gear');
 const pOp=document.getElementById('pOp'), pBl=document.getElementById('pBl');
 let prefs=(()=>{ try{ return {...DEF,...JSON.parse(localStorage.getItem(PREFKEY))}; }catch(e){ return {...DEF}; } })();
@@ -1724,6 +1734,7 @@ function applyPrefs(){
   document.querySelectorAll('#linkSeg button').forEach(b=>b.classList.toggle('on',b.dataset.v===prefs.link));
   if(typeof paintAlertPrefs==='function') paintAlertPrefs();
   document.getElementById('statusTg').classList.toggle('on',prefs.status!==false);
+  document.getElementById('introTg').classList.toggle('on',prefs.intro!==false);
   document.getElementById('ecoTg').classList.toggle('on',!!prefs.eco); document.body.classList.toggle('eco',!!prefs.eco); if(sky) sky.dirty=true;
   try{ localStorage.setItem(PREFKEY,JSON.stringify(prefs)); }catch(e){}
 }
@@ -1731,6 +1742,7 @@ document.querySelectorAll('#linkSeg button').forEach(b=>b.onclick=()=>{ prefs.li
 pOp.addEventListener('input',()=>{ prefs.op=+pOp.value; applyPrefs(); });
 pBl.addEventListener('input',()=>{ prefs.bl=+pBl.value; applyPrefs(); });
 document.getElementById('ecoTg').onclick=()=>{ prefs.eco=!prefs.eco; applyPrefs(); };
+document.getElementById('introTg').onclick=()=>{ prefs.intro=prefs.intro===false; applyPrefs(); if(prefs.intro) playIntro(); };
 document.getElementById('statusTg').onclick=()=>{ prefs.status=prefs.status===false; applyPrefs(); render(); };
 document.getElementById('prefReset').onclick=()=>{ prefs={...DEF,alerts:prefs.alerts}; applyPrefs(); };
 function togglePrefs(force){ const o=force??!prefsEl.classList.contains('open'); prefsEl.classList.toggle('open',o); gear.classList.toggle('on',o); if(o){ paintLastSave(); paintArchives(); toggleFind(false); toastEl.classList.remove('show'); } }
@@ -1743,6 +1755,32 @@ render();
 maybeRemind();
 setTimeout(checkAlerts,1200);
 requestAnimationFrame(loop);
+/* ---------- Animation d'ouverture « Nébuleuse » ---------- */
+function playIntro(){
+  if(document.getElementById('intro')) return;
+  const ov=document.createElement('div'); ov.id='intro'; ov.setAttribute('aria-hidden','true');
+  let st=''; for(let k=0;k<46;k++){ const z=1+Math.random()*2.2; st+=`<i style="left:${(Math.random()*100).toFixed(1)}%;top:${(Math.random()*100).toFixed(1)}%;width:${z.toFixed(1)}px;height:${z.toFixed(1)}px"></i>`; }
+  ov.innerHTML=st+'<div class="wm">Nota</div>'; document.body.appendChild(ov);
+  const anims=[], A=(el,k,o)=>{ const a=el.animate(k,Object.assign({easing:'cubic-bezier(.2,.8,.2,1)',fill:'backwards'},o)); anims.push(a); return a; };
+  // 1. les étoiles s'allument une à une
+  ov.querySelectorAll('i').forEach(s=>A(s,[{opacity:0,transform:'scale(0)'},{opacity:1,transform:'scale(1.7)',offset:.6},{opacity:.85,transform:'scale(1)'}],{duration:520,delay:Math.random()*700,fill:'both'}));
+  // 2. le noir s'efface, la nébuleuse sort du flou
+  A(ov,[{backgroundColor:'rgba(0,0,0,1)'},{backgroundColor:'rgba(0,0,0,0)'}],{duration:900,delay:500,easing:'ease-in-out',fill:'both'});
+  A(document.getElementById('world'),[{filter:'blur(18px) brightness(.4)',transform:'scale(1.25)'},{filter:'blur(0px) brightness(1)',transform:'scale(1)'}],{duration:1500,delay:400});
+  // 3. « Nota » apparaît en lumière puis s'envole
+  const wm=ov.querySelector('.wm');
+  A(wm,[{opacity:0,letterSpacing:'.35em',filter:'blur(8px)'},{opacity:1,letterSpacing:'-.02em',filter:'blur(0px)'}],{duration:800,delay:700,fill:'both'});
+  A(wm,[{opacity:1,transform:'translateY(-50%)'},{opacity:0,transform:'translateY(-50%) translateY(-90px) scale(.8)'}],{duration:500,delay:1550,easing:'ease-in',fill:'forwards'});
+  ov.querySelectorAll('i').forEach(s=>A(s,[{opacity:.85},{opacity:0}],{duration:400,delay:1800,fill:'forwards'}));
+  // 4. les bulles montent du bas, les liens et les boutons apparaissent
+  [...document.querySelectorAll('#bubbles .glass')].slice(0,40).forEach((g,k)=>A(g,[{transform:'translateY(180px) scale(.6)',opacity:0},{transform:'translateY(-8px) scale(1.04)',opacity:1,offset:.75},{transform:'none',opacity:1}],{duration:900,delay:1500+Math.min(k,8)*120}));
+  A(document.getElementById('links'),[{opacity:0},{opacity:1}],{duration:600,delay:1800});
+  ['find','gear','zoom','add','hint'].forEach(id=>{ const e=document.getElementById(id); if(e) A(e,[{opacity:0,transform:'translateY(8px)'},{opacity:1,transform:'none'}],{duration:500,delay:2000}); });
+  let done=false; const end=()=>{ if(done) return; done=true; anims.forEach(a=>{ try{ a.finish(); }catch(_){} }); ov.remove(); };
+  ov.addEventListener('pointerdown',e=>{ e.stopPropagation(); end(); },true); // un toucher passe l'animation
+  setTimeout(end,2500);
+}
+if(prefs.intro!==false && !reduce) playIntro();
 if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
