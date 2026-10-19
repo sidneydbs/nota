@@ -1451,12 +1451,22 @@ function animateTo(tx,ty,tz,dur=520){
     cam.z=f.z*Math.pow(tz/f.z,k); cam.x=f.x+(tx-f.x)*k; cam.y=f.y+(ty-f.y)*k; camChanged();
     if(k>=1) anim=null; };
 }
-function fitAll(){
+function fitAll(instant){
   if(!state.ideas.length){ animateTo(0,0,1); return; }
   let a=1e9,b=1e9,c=-1e9,d=-1e9;
   state.ideas.forEach(i=>{ const r=radius(i)+20; a=Math.min(a,i.x-r); b=Math.min(b,i.y-r); c=Math.max(c,i.x+r); d=Math.max(d,i.y+r); });
-  const z=clampZ(Math.min(1.6,(board.clientWidth-200)/(c-a),(board.clientHeight-240)/(d-b)));
+  const W=board.clientWidth, H=board.clientHeight, mx=Math.min(200,W*.14), my=Math.min(240,H*.24); // marges adaptées au téléphone
+  const z=clampZ(Math.min(1.6,(W-mx)/(c-a),(H-my)/(d-b)));
+  if(instant){ anim=null; vel.x=vel.y=0; cam.x=(a+c)/2; cam.y=(b+d)/2+30/z; cam.z=z; camChanged(); return; }
   animateTo((a+c)/2,(b+d)/2+30/z,z);
+}
+// à l'ouverture : si la caméra mémorisée ne montre pas assez de bulles, on cadre directement sur toutes les bulles
+function frameOnLaunch(){
+  const n=state.ideas.length; if(!n) return;
+  const W=board.clientWidth, H=board.clientHeight; if(!W||!H) return;
+  const vis=state.ideas.filter(i=>{ const sx=(i.x-cam.x)*cam.z+W/2, sy=(i.y-cam.y)*cam.z+H/2, r=radius(i)*cam.z;
+    return sx>r*.3 && sx<W-r*.3 && sy>70 && sy<H-90; }).length;
+  if(vis<Math.max(1,Math.ceil(n*.6)) || cam.z<.25) fitAll(true);
 }
 const vel={x:0,y:0};
 function stepInertia(){
@@ -1586,7 +1596,7 @@ window.addEventListener('wheel',e=>{
 
 document.getElementById('zin').onclick=()=>animateTo(cam.x,cam.y,clampZ(cam.z*1.6),320);
 document.getElementById('zout').onclick=()=>animateTo(cam.x,cam.y,clampZ(cam.z/1.6),320);
-document.getElementById('zfit').onclick=fitAll;
+document.getElementById('zfit').onclick=()=>fitAll();
 zpct.onclick=()=>animateTo(cam.x,cam.y,1,380);
 
 /* ---------- Alertes ---------- */
@@ -2126,6 +2136,8 @@ applyPrefs();
 window.addEventListener('resize',render);
 camChanged();
 render();
+frameOnLaunch(); setTimeout(frameOnLaunch,450); // iPhone : la taille réelle de l'écran arrive un peu après
+addEventListener('pageshow',e=>{ if(e.persisted) frameOnLaunch(); });
 maybeRemind();
 setTimeout(checkAlerts,1200);
 requestAnimationFrame(loop);
