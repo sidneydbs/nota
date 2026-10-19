@@ -42,7 +42,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#07081a;color:var(--in
 #sky{position:absolute;inset:0;width:100%;height:100%;display:block;opacity:0;transition:opacity 1.2s}
 #world.gl #sky{opacity:1}
 #world.gl #orbs{display:none}
-#world.gl ~ #grain{opacity:.025}
+#world.gl ~ #grain{display:none} /* le shader fait déjà le grain : pas de calque animé en plus */
 #grain{position:fixed;inset:-50%;pointer-events:none;opacity:.07;z-index:1;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   animation:grain 1.2s steps(6) infinite}
@@ -51,7 +51,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:#07081a;color:var(--in
 /* ---------- Plateau ---------- */
 #board{position:fixed;inset:0;z-index:2;cursor:grab}
 #board.panning{cursor:grabbing}
-#stage{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;will-change:transform}
+#stage{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0}
+#stage.moving{will-change:transform} /* calque GPU seulement pendant un zoom : le texte reste net ensuite */
 #orbs{position:absolute;inset:-10%;will-change:transform}
 #links{position:absolute;left:0;top:0;width:1px;height:1px;pointer-events:none;overflow:visible}
 /* vue de loin : les noms restent lisibles sous les bulles */
@@ -95,7 +96,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#07081a;color:var(--in
     inset 14px 18px 30px rgba(255,255,255,.06),
     0 0 42px color-mix(in srgb,var(--c) 30%, transparent),
     0 22px 44px rgba(0,0,10,.38);
-  animation:morph 9s ease-in-out infinite alternate;
+  /* forme organique fixe : la respiration se fait en JS (sans redessiner le verre) */
   transition:transform .35s cubic-bezier(.2,1.5,.4,1), box-shadow .3s}
 /* reflet spéculaire */
 .glass::before{content:"";position:absolute;left:16%;top:9%;width:44%;height:26%;border-radius:50%;
@@ -105,7 +106,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#07081a;color:var(--in
 .glass::after{content:"";position:absolute;right:16%;bottom:10%;width:30%;height:9%;border-radius:50%;
   background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 80%, white),transparent);
   transform:rotate(-30deg);filter:blur(2px);opacity:.55;pointer-events:none}
-.glass.new{animation:morph 9s ease-in-out infinite alternate, pop .7s cubic-bezier(.2,1.6,.35,1) both}
+.glass.new{animation:pop .7s cubic-bezier(.2,1.6,.35,1) both}
 .glass.d1{--s:110px;font-size:13.5px;padding:16px}
 .glass.d2{--s:90px;font-size:12px;padding:13px}
 .glass span{position:relative;z-index:1;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
@@ -120,7 +121,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#07081a;color:var(--in
   box-shadow:inset 0 1.5px 0 rgba(255,255,255,.6),inset 0 -14px 28px color-mix(in srgb,var(--c) 40%, transparent),
   0 0 70px color-mix(in srgb,var(--c) 45%, transparent),0 34px 60px rgba(0,0,10,.5)}
 .node.dragging{z-index:5}
-.node.jelly .glass{animation:morph 9s ease-in-out infinite alternate, jelly .7s ease both}
+.node.jelly .glass{animation:jelly .7s ease both}
 @keyframes morph{
   0%{border-radius:48% 52% 55% 45% / 52% 46% 54% 48%}
   33%{border-radius:55% 45% 47% 53% / 45% 55% 47% 53%}
@@ -477,12 +478,10 @@ body.eco .glass{animation:none!important} /* pas de respiration ni d'apparition 
 @media (prefers-reduced-motion:reduce){
   .orb,#grain,.glass,#add::before{animation:none!important}
 }
-/* animation d'ouverture « Nébuleuse » */
-#intro{position:fixed;left:0;top:0;right:0;height:100%;z-index:200;background:#000;overflow:hidden;cursor:pointer}
+/* animation d'ouverture « Rideau » : un voile sombre au bord flou glisse vers le bas */
+#intro{position:fixed;left:0;top:0;right:0;height:100%;z-index:200;overflow:hidden;cursor:pointer}
 html.sa #intro{height:var(--appH,100lvh)}
-#intro i{position:absolute;border-radius:50%;background:#fff;box-shadow:0 0 6px rgba(255,255,255,.8)}
-#intro .wm{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:min(22vw,96px);font-weight:800;
-  letter-spacing:-.02em;color:#fff;text-shadow:0 0 34px rgba(170,150,255,.85),0 0 90px rgba(120,90,255,.5)}
+#intro .veil{position:absolute;left:0;right:0;top:-60%;height:160%;background:linear-gradient(180deg,rgba(7,7,26,0) 0%,#07071a 35%,#07071a 100%);will-change:transform}
 /* iPhone écran d'accueil : iOS annonce une hauteur trop courte → on couvre tout l'écran */
 html.sa,html.sa body{height:var(--appH,100lvh)}
 html.sa #world,html.sa #board,html.sa #overlay{inset:auto;top:0;left:0;right:0;height:var(--appH,100lvh)}
@@ -547,7 +546,7 @@ html.sa #world,html.sa #board,html.sa #overlay{inset:auto;top:0;left:0;right:0;h
     <button class="tg" id="statusTg" aria-label="Couleur selon l'avancement"></button>
   </div>
   <div class="pref switch">
-    <div>Animation d'ouverture<small>Nébuleuse au lancement de l'app</small></div>
+    <div>Animation d'ouverture<small>Rideau au lancement de l'app</small></div>
     <button class="tg" id="introTg" aria-label="Animation d'ouverture"></button>
   </div>
   <div class="pref switch">
@@ -691,6 +690,7 @@ function hash(s){ let h=0; for(const ch of s) h=(h*31+ch.charCodeAt(0))|0; retur
 
 function cx(){return board.clientWidth/2} function cy(){return board.clientHeight/2}
 
+const SHAPES=['48% 52% 55% 45% / 52% 46% 54% 48%','55% 45% 47% 53% / 45% 55% 47% 53%','45% 55% 52% 48% / 55% 47% 53% 45%','52% 48% 45% 55% / 48% 53% 47% 52%'];
 function render(){
   bubblesEl.innerHTML=''; nodes.clear();
   // les idées principales sont dessinées au-dessus de leurs branches
@@ -706,8 +706,7 @@ function render(){
     lastColor.set(idea.id,ec);
     if(isAuto(idea)&&statusOf(idea)) g.classList.add('st');
     const h=hash(idea.id);
-    g.style.animationDelay=`-${h%9000}ms, 0ms`; g.style.animationDuration=`${7+(h%5)}s, .7s`; // chaque bulle respire à son rythme
-    g.style.animationDuration=`${7+(h%5)}s, .7s`;
+    g.style.borderRadius=SHAPES[h%SHAPES.length]; // chaque bulle a sa propre forme organique
     const n=children(idea.id).length;
     const todo=pendingTree(idea), dst=todo?dueTree(idea):'';
     g.innerHTML=`<span></span>${idea.body.trim()?'<i class="dot"></i>':''}${n?`<b class="count">${n}</b>`:''}${todo?`<b class="notif ${dst}">${todo}</b>`:''}${burstIds.has(idea.id)?'<i class="burst"></i>':''}`;
@@ -733,7 +732,7 @@ const NS='http://www.w3.org/2000/svg';
 const still=()=>reduce||(typeof prefs!=='undefined'&&!!prefs.eco); // pas de mouvement (réglage système ou mode économie)
 const ropes=new Map(), SEG=8, ITER=5, DAMP=.93, STIFF=.7, SLACK=1.015; let lastT=0;
 // agitation : 1 pendant un déplacement, redescend doucement vers le calme quand on lâche
-let agit=0, wobPh=0, flowPos=0;
+let agit=0, wobPh=0, flowPos=0, linkTick=0;
 /* ---------- Fond HD : nébuleuse WebGL rendue à la résolution native (max 4K) ---------- */
 const skyCv=document.getElementById('sky'), worldEl=document.getElementById('world');
 let sky=null;
@@ -754,7 +753,7 @@ vec3 stars(vec2 px,float cell,float seed,float sz){
   vec2 sp=vec2(h(id+seed+1.3),h(id+seed+7.1))*.6+.2;
   vec2 d=(f-sp)*cell; float dist=length(d);
   float rad=sz*D*(.6+h(id+seed+3.3)*.9);
-  float tw=.65+.35*sin(T*(1.+h(id)*3.)+h(id+9.)*40.);
+  float tw=.7+.3*sin(T*(.5+h(id)*1.2)+h(id+9.)*40.);
   float core=exp(-dist*dist/(rad*rad));
   float halo=exp(-dist/(rad*5.))*.12;
   vec3 tint=mix(vec3(.75,.85,1.),vec3(1.,.85,.7),h(id+seed+5.));
@@ -794,7 +793,7 @@ void main(){
   gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
   const loc=gl.getAttribLocation(pr,'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
   sky={gl,uR:gl.getUniformLocation(pr,'R'),uT:gl.getUniformLocation(pr,'T'),uD:gl.getUniformLocation(pr,'D'),uP:gl.getUniformLocation(pr,'P'),
-       last:-1e9,fps:30,dpr:1,acc:[]};
+       last:-1e9,fps:15,dpr:1,acc:[]}; // 15 images/s suffisent pour une nébuleuse qui dérive lentement
   function size(){
     const cssW=skyCv.clientWidth||innerWidth, cssH=skyCv.clientHeight||innerHeight; // taille réelle du fond (écran entier sur iPhone)
     let dpr=Math.min(devicePixelRatio||1,3);
@@ -810,11 +809,11 @@ void main(){
 function drawSky(t){
   if(!sky) return;
   const frameMs=1000/sky.fps;
-  if(t-sky.last<frameMs && !(still() && sky.last<0)) return;
+  if(t-sky.last<frameMs && !sky.dirty && !(still() && sky.last<0)) return; // on redessine tout de suite si la vue bouge
   if(still() && sky.last>0 && !sky.dirty) return;
   // régulation : si l'appareil peine, on baisse la cadence, jamais la résolution
   if(sky.last>0){ const dt=t-sky.last; sky.acc.push(dt); if(sky.acc.length>20){ const m=sky.acc.reduce((a,b)=>a+b)/sky.acc.length; sky.acc=[];
-    if(m>frameMs*1.6 && sky.fps>12) sky.fps=Math.max(12,sky.fps-6); else if(m<frameMs*1.15 && sky.fps<30) sky.fps+=3; } }
+    if(m>frameMs*1.6 && sky.fps>8) sky.fps=Math.max(8,sky.fps-3); else if(m<frameMs*1.15 && sky.fps<15) sky.fps+=1; } }
   sky.last=t; sky.dirty=false;
   const {gl}=sky;
   gl.uniform2f(sky.uR,skyCv.width,skyCv.height);
@@ -896,7 +895,8 @@ function frame(t){
     const amp=still()?0:(n.drag?0:1);
     n.ox=Math.sin(t*.00055*n.f1+n.phase)*7*amp;
     n.oy=Math.cos(t*.00045*n.f2+n.phase*1.3)*9*amp;
-    n.el.style.transform=`translate(${X+i.x+n.ox}px,${Y+i.y+n.oy}px)`;
+    const br=amp?1+Math.sin(t*.0009*n.f1+n.phase*2)*.016:1; // respiration douce, calculée par le GPU
+    n.el.style.transform=`translate(${(X+i.x+n.ox).toFixed(2)}px,${(Y+i.y+n.oy).toFixed(2)}px) scale(${br.toFixed(4)})`;
   });
   // filaments organiques : corde souple simulée (inertie, élasticité, ondulation)
   const dtMs=Math.min(100,Math.max(0,t-(lastT||t))), now=t, dtf=Math.min(2.5,Math.max(.5,dtMs/16.67)); lastT=t;
@@ -906,6 +906,7 @@ function frame(t){
   const wobAmp=.045*agit+.002*calm;               // amplitude : forte → légère
   const damp=.84+.09*agit;                        // plus de frottement au repos
   flowPos+=dtf*(.5*agit+.18*calm);                // la lumière circule plus doucement au repos
+  if(agit<.02 && !(sky&&sky.dirty) && !(typeof rzId!=='undefined'&&rzId) && (linkTick=(linkTick+1)%3)!==0) return; // au repos : liens redessinés 1 image sur 3
   let html='';
   const alive=new Set();
   state.ideas.forEach(c=>{
@@ -1298,7 +1299,7 @@ document.getElementById('add').onclick=()=>{
 /* ---------- Caméra : zoom & navigation ---------- */
 function loadCam(){ try{ const c=JSON.parse(localStorage.getItem(CAMKEY)); if(c&&isFinite(c.z)) return c; }catch(e){} return {x:0,y:0,z:1}; }
 function saveCam(){ try{ localStorage.setItem(CAMKEY,JSON.stringify({x:cam.x,y:cam.y,z:cam.z})); }catch(e){} }
-let camSaveT=0; function camChanged(){ if(sky) sky.dirty=true; zpct.textContent=Math.round(cam.z*100)+' %'; clearTimeout(camSaveT); camSaveT=setTimeout(saveCam,300); }
+let camSaveT=0, movT=0; function camChanged(){ if(sky) sky.dirty=true; stage.classList.add('moving'); clearTimeout(movT); movT=setTimeout(()=>stage.classList.remove('moving'),220); zpct.textContent=Math.round(cam.z*100)+' %'; clearTimeout(camSaveT); camSaveT=setTimeout(saveCam,300); }
 const clampZ=z=>Math.min(ZMAX,Math.max(ZMIN,z));
 function zoomAt(sx,sy,z){
   // garde fixe le point du monde sous le doigt / curseur
@@ -1755,30 +1756,21 @@ render();
 maybeRemind();
 setTimeout(checkAlerts,1200);
 requestAnimationFrame(loop);
-/* ---------- Animation d'ouverture « Nébuleuse » ---------- */
+/* ---------- Animation d'ouverture « Rideau » ---------- */
 function playIntro(){
   if(document.getElementById('intro')) return;
   const ov=document.createElement('div'); ov.id='intro'; ov.setAttribute('aria-hidden','true');
-  let st=''; for(let k=0;k<46;k++){ const z=1+Math.random()*2.2; st+=`<i style="left:${(Math.random()*100).toFixed(1)}%;top:${(Math.random()*100).toFixed(1)}%;width:${z.toFixed(1)}px;height:${z.toFixed(1)}px"></i>`; }
-  ov.innerHTML=st+'<div class="wm">Nota</div>'; document.body.appendChild(ov);
-  const anims=[], A=(el,k,o)=>{ const a=el.animate(k,Object.assign({easing:'cubic-bezier(.2,.8,.2,1)',fill:'backwards'},o)); anims.push(a); return a; };
-  // 1. les étoiles s'allument une à une
-  ov.querySelectorAll('i').forEach(s=>A(s,[{opacity:0,transform:'scale(0)'},{opacity:1,transform:'scale(1.7)',offset:.6},{opacity:.85,transform:'scale(1)'}],{duration:520,delay:Math.random()*700,fill:'both'}));
-  // 2. le noir s'efface, la nébuleuse sort du flou
-  A(ov,[{backgroundColor:'rgba(0,0,0,1)'},{backgroundColor:'rgba(0,0,0,0)'}],{duration:900,delay:500,easing:'ease-in-out',fill:'both'});
-  A(document.getElementById('world'),[{filter:'blur(18px) brightness(.4)',transform:'scale(1.25)'},{filter:'blur(0px) brightness(1)',transform:'scale(1)'}],{duration:1500,delay:400});
-  // 3. « Nota » apparaît en lumière puis s'envole
-  const wm=ov.querySelector('.wm');
-  A(wm,[{opacity:0,letterSpacing:'.35em',filter:'blur(8px)'},{opacity:1,letterSpacing:'-.02em',filter:'blur(0px)'}],{duration:800,delay:700,fill:'both'});
-  A(wm,[{opacity:1,transform:'translateY(-50%)'},{opacity:0,transform:'translateY(-50%) translateY(-90px) scale(.8)'}],{duration:500,delay:1550,easing:'ease-in',fill:'forwards'});
-  ov.querySelectorAll('i').forEach(s=>A(s,[{opacity:.85},{opacity:0}],{duration:400,delay:1800,fill:'forwards'}));
-  // 4. les bulles montent du bas, les liens et les boutons apparaissent
-  [...document.querySelectorAll('#bubbles .glass')].slice(0,40).forEach((g,k)=>A(g,[{transform:'translateY(180px) scale(.6)',opacity:0},{transform:'translateY(-8px) scale(1.04)',opacity:1,offset:.75},{transform:'none',opacity:1}],{duration:900,delay:1500+Math.min(k,8)*120}));
-  A(document.getElementById('links'),[{opacity:0},{opacity:1}],{duration:600,delay:1800});
-  ['find','gear','zoom','add','hint'].forEach(id=>{ const e=document.getElementById(id); if(e) A(e,[{opacity:0,transform:'translateY(8px)'},{opacity:1,transform:'none'}],{duration:500,delay:2000}); });
+  ov.innerHTML='<div class="veil"></div>'; document.body.appendChild(ov);
+  const anims=[], A=(el,k,o)=>{ const a=el.animate(k,Object.assign({easing:'cubic-bezier(.25,.1,.25,1)',fill:'backwards'},o)); anims.push(a); return a; };
+  // le voile glisse vers le bas et dévoile l'app de haut en bas (transform seul : fluide)
+  A(ov.firstChild,[{transform:'translateY(0)'},{transform:'translateY(105%)'}],{duration:1200,easing:'cubic-bezier(.55,0,.35,1)',fill:'forwards'});
+  // les bulles apparaissent en fondu, avec un tout petit glissement
+  [...document.querySelectorAll('#bubbles .glass')].slice(0,40).forEach((g,k)=>A(g,[{opacity:0,transform:'translateY(6px)'},{opacity:1,transform:'none'}],{duration:650,delay:350+Math.min(k,8)*90}));
+  A(document.getElementById('links'),[{opacity:0},{opacity:1}],{duration:600,delay:600});
+  ['find','gear','zoom','add','hint'].forEach(id=>{ const e=document.getElementById(id); if(e) A(e,[{opacity:0},{opacity:1}],{duration:600,delay:600}); });
   let done=false; const end=()=>{ if(done) return; done=true; anims.forEach(a=>{ try{ a.finish(); }catch(_){} }); ov.remove(); };
   ov.addEventListener('pointerdown',e=>{ e.stopPropagation(); end(); },true); // un toucher passe l'animation
-  setTimeout(end,2500);
+  setTimeout(end,1500);
 }
 if(prefs.intro!==false && !reduce) playIntro();
 if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
