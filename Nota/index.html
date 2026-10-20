@@ -114,6 +114,10 @@ body.locked .node{cursor:default}
 .glass.d1{--s:110px;font-size:13.5px;padding:16px}
 .glass.d2{--s:90px;font-size:12px;padding:13px}
 .glass span{position:relative;z-index:1;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.glass .count::after{content:"";position:absolute;inset:-10px} /* zone de toucher élargie */
+.glass .count{cursor:pointer;transition:transform .25s cubic-bezier(.2,1.6,.4,1)}
+.glass .count:active{transform:scale(.85)}
+.glass .count.fold{background:radial-gradient(circle at 35% 25%,#fff,#dfe6ff 70%);color:#1a1d40;border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.25),0 0 14px rgba(200,215,255,.7)}
 .glass .count{position:absolute;top:4%;left:4%;z-index:2;min-width:24px;height:24px;padding:0 7px;border-radius:12px;
   font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;
   background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);
@@ -831,9 +835,10 @@ function cx(){return board.clientWidth/2} function cy(){return board.clientHeigh
 
 const SHAPES=['48% 52% 55% 45% / 52% 46% 54% 48%','55% 45% 47% 53% / 45% 55% 47% 53%','45% 55% 52% 48% / 55% 47% 53% 45%','52% 48% 45% 55% / 48% 53% 47% 52%'];
 function render(){
+  computeHidden();
   bubblesEl.innerHTML=''; nodes.clear();
   // les idées principales sont dessinées au-dessus de leurs branches
-  [...state.ideas].sort((a,b)=>depth(b)-depth(a)).forEach(idea=>{
+  [...state.ideas].filter(i=>!HID.has(i.id)).sort((a,b)=>depth(b)-depth(a)).forEach(idea=>{
     const node=document.createElement('div'); node.className='node'; node.dataset.id=idea.id;
     const g=document.createElement('div');
     const d=depth(idea);
@@ -844,11 +849,12 @@ function render(){
     else g.style.setProperty('--c',ec);
     lastColor.set(idea.id,ec);
     if(isAuto(idea)&&statusOf(idea)) g.classList.add('st');
+    if(idea.folded&&children(idea.id).length) g.classList.add('folded');
     const h=hash(idea.id);
     g.style.borderRadius=SHAPES[h%SHAPES.length]; // chaque bulle a sa propre forme organique
     const n=children(idea.id).length;
     const todo=pendingTree(idea), dst=todo?dueTree(idea):'';
-    g.innerHTML=`<span></span>${idea.body.trim()?'<i class="dot"></i>':''}${n?`<b class="count">${n}</b>`:''}${todo?`<b class="notif ${dst}">${todo}</b>`:''}${burstIds.has(idea.id)?'<i class="burst"></i>':''}`;
+    g.innerHTML=`<span></span>${idea.body.trim()?'<i class="dot"></i>':''}${n?(idea.folded?`<b class="count fold" title="Ressortir les branches">+${descendants(idea.id).length}</b>`:`<b class="count" title="Ranger les branches">${n}</b>`):''}${todo?`<b class="notif ${dst}">${todo}</b>`:''}${burstIds.has(idea.id)?'<i class="burst"></i>':''}`;
     burstIds.delete(idea.id);
     const dn=doneTree(idea), prevDn=lastDone.has(idea.id)?lastDone.get(idea.id):dn;
     if(dn){ const ok=document.createElement('b'); ok.className='okb'+(dn>prevDn?' bump':''); ok.title=dn+' tâche(s) effectuée(s)';
@@ -866,6 +872,37 @@ function render(){
   if(typeof paintAgBadge==='function') try{ paintAgBadge(); }catch(_){}
   if(typeof INTRO!=='undefined' && INTRO) introPop(); // animation d'ouverture en cours : on la reprend
   frame(performance.now());
+}
+
+/* ---------- Ranger / ressortir les branches ---------- */
+let HID=new Set(); // bulles rangées dans une bulle parente repliée
+function computeHidden(){ HID=new Set(); state.ideas.forEach(i=>{ let p=i.parent&&byId(i.parent), k=0; while(p&&k++<30){ if(p.folded){ HID.add(i.id); break; } p=p.parent&&byId(p.parent); } }); }
+// ressort toutes les bulles parentes repliées au-dessus d'une bulle (recherche, alerte, agenda…)
+function reveal(id,quiet){ let i=byId(id), p=i&&i.parent&&byId(i.parent), ch=false, k=0;
+  while(p&&k++<30){ if(p.folded){ p.folded=false; ch=true; } p=p.parent&&byId(p.parent); }
+  if(ch){ save(); if(!quiet) render(); } return ch; }
+function toggleFold(idea){
+  const kids=descendants(idea.id); if(!kids.length) return;
+  const A=(el,k,o)=>{ try{ return el.animate(k,o); }catch(_){ return null; } };
+  if(!idea.folded){
+    // les branches visibles glissent et se fondent dans la bulle parente
+    const vis=kids.filter(c=>nodes.has(c.id)); let last=null;
+    vis.forEach((c,k)=>{ const n=nodes.get(c.id), g=n&&n.el.querySelector('.glass'); if(!g) return;
+      const dx=idea.x-c.x-(n.ox||0), dy=idea.y-c.y-(n.oy||0);
+      last=A(g,[{transform:'none',opacity:1},{transform:`translate(${dx}px,${dy}px) scale(.18)`,opacity:0}],{duration:420,delay:k*25,easing:'cubic-bezier(.5,0,.75,.4)',fill:'forwards'}); });
+    linksEl.animate&&linksEl.animate([{opacity:1},{opacity:.15}],{duration:380,fill:'forwards'});
+    const done=()=>{ idea.folded=true; save(); render(); linksEl.getAnimations&&linksEl.getAnimations().forEach(a=>a.cancel());
+      const pn=nodes.get(idea.id); if(pn){ pn.el.classList.remove('jelly'); void pn.el.offsetWidth; pn.el.classList.add('jelly'); }
+      toast(kids.length+(kids.length>1?' branches rangées':' branche rangée')+' dans « '+(idea.title||'Sans titre')+' »','Ressortir',()=>{ if(idea.folded) toggleFold(idea); }); };
+    if(last) last.onfinish=done; else done();
+  } else {
+    idea.folded=false; save(); render();
+    // les branches ressortent de la bulle et reprennent leur place
+    kids.forEach((c,k)=>{ const n=nodes.get(c.id), g=n&&n.el.querySelector('.glass'); if(!g) return;
+      const dx=idea.x-c.x, dy=idea.y-c.y;
+      A(g,[{transform:`translate(${dx}px,${dy}px) scale(.18)`,opacity:0},{transform:'none',opacity:1}],{duration:520,delay:k*30,easing:'cubic-bezier(.2,1.3,.4,1)',fill:'backwards'}); });
+    linksEl.animate&&linksEl.animate([{opacity:0},{opacity:1}],{duration:500,delay:200,fill:'backwards'});
+  }
 }
 
 /* ---------- Boucle vivante : flottement + filaments ---------- */
@@ -1012,7 +1049,7 @@ function drawLink(style,L){
 let relaxSaveT=0;
 function relax(){
   // les bulles se repoussent doucement pour ne jamais se chevaucher (la bulle tenue ne bouge pas)
-  const L=state.ideas, n=L.length; let moved=false;
+  const L=state.ideas.filter(i=>!HID.has(i.id)), n=L.length; let moved=false;
   for(let a=0;a<n;a++) for(let b=a+1;b<n;b++){
     const A=L[a], B=L[b], dx=B.x-A.x, dy=B.y-A.y, d=Math.hypot(dx,dy)||.01, min=radius(A)+radius(B)+14;
     if(d>=min) continue;
@@ -1121,11 +1158,11 @@ function frame(t){
 function loop(t){ frame(t); drawSky(t); requestAnimationFrame(loop); }
 
 function attachDrag(node,idea){
-  let sx,sy,start,moved=false,active=false,group,holdT=0,longDone=false;
+  let sx,sy,start,moved=false,active=false,group,holdT=0,longDone=false,onCount=false;
   const cancelHold=()=>{ clearTimeout(holdT); holdT=0; node.querySelector('.holdRing')?.remove(); };
   node.addEventListener('pointerdown',e=>{
     if(pointers.size>1){ cancelHold(); return; } // deux doigts = zoom (ou taille en mode taille)
-    active=true; moved=false; longDone=false; sx=e.clientX; sy=e.clientY;
+    active=true; moved=false; longDone=false; sx=e.clientX; sy=e.clientY; onCount=!!e.target.closest('.count');
     if(isLocked()){ group=null; return; } // bulles verrouillées : le doigt fait glisser l'écran, un simple toucher ouvre la bulle
     // appui long (0,5 s sans bouger) → mode taille
     cancelHold();
@@ -1158,12 +1195,12 @@ function attachDrag(node,idea){
     cancelHold();
     if(longDone){ longDone=false; return; }
     if(!active) return; active=false;
-    if(!group){ if(!moved){ if(rzId) exitRz(); open(idea.id); } return; }
+    if(!group){ if(!moved){ if(rzId) exitRz(); if(onCount) toggleFold(idea); else open(idea.id); } return; }
     node.classList.remove('press');
     const n=nodes.get(idea.id); if(n) n.drag=false;
     if(moved){ node.classList.remove('dragging'); void node.offsetWidth; node.classList.add('jelly'); save(); if(rzId===idea.id) placeRz(); }
     else if(rzId===idea.id) exitRz(); // toucher la bulle en mode taille = terminer
-    else { if(rzId) exitRz(); open(idea.id); }
+    else { if(rzId) exitRz(); if(onCount) toggleFold(idea); else open(idea.id); }
   };
   node.addEventListener('pointerup',end);
   node.addEventListener('pointercancel',()=>{cancelHold();active=false;node.classList.remove('press','dragging');const n=nodes.get(idea.id); if(n) n.drag=false; save();});
@@ -1225,7 +1262,7 @@ function close(){
   document.activeElement && document.activeElement.blur();
   render();
 }
-function switchTo(id){ if(current && !current.title.trim()) current.title='Sans titre'; save(); render(); open(id); }
+function switchTo(id){ if(current && !current.title.trim()) current.title='Sans titre'; reveal(id,true); save(); render(); open(id); }
 
 function paintParent(){
   parentEl.innerHTML='';
@@ -1315,7 +1352,7 @@ function paintChips(){
   add.onclick=addBranch; chipsEl.appendChild(add);
 }
 function addBranch(){
-  const p=current;
+  const p=current; if(p.folded) p.folded=false;
   const [x,y]=freeSpot(p.x,p.y,radius(p)+95,58);
   const c=newIdea(x,y,'Nouvelle branche',p.id,p.color);
   state.ideas.push(c); switchTo(c.id);
@@ -1462,7 +1499,7 @@ function animateTo(tx,ty,tz,dur=520){
 function fitAll(instant){
   if(!state.ideas.length){ animateTo(0,0,1); return; }
   let a=1e9,b=1e9,c=-1e9,d=-1e9;
-  state.ideas.forEach(i=>{ const r=radius(i)+20; a=Math.min(a,i.x-r); b=Math.min(b,i.y-r); c=Math.max(c,i.x+r); d=Math.max(d,i.y+r); });
+  state.ideas.filter(i=>!HID.has(i.id)).forEach(i=>{ const r=radius(i)+20; a=Math.min(a,i.x-r); b=Math.min(b,i.y-r); c=Math.max(c,i.x+r); d=Math.max(d,i.y+r); });
   const W=board.clientWidth, H=board.clientHeight, mx=Math.min(200,W*.14), my=Math.min(240,H*.24); // marges adaptées au téléphone
   const z=clampZ(Math.min(1.6,(W-mx)/(c-a),(H-my)/(d-b)));
   if(instant){ anim=null; vel.x=vel.y=0; cam.x=(a+c)/2; cam.y=(b+d)/2+30/z; cam.z=z; camChanged(); return; }
@@ -1470,9 +1507,10 @@ function fitAll(instant){
 }
 // à l'ouverture : si la caméra mémorisée ne montre pas assez de bulles, on cadre directement sur toutes les bulles
 function frameOnLaunch(){
-  const n=state.ideas.length; if(!n) return;
+  let n=state.ideas.length; if(!n) return;
   const W=board.clientWidth, H=board.clientHeight; if(!W||!H) return;
-  const vis=state.ideas.filter(i=>{ const sx=(i.x-cam.x)*cam.z+W/2, sy=(i.y-cam.y)*cam.z+H/2, r=radius(i)*cam.z;
+  const shown=state.ideas.filter(i=>!HID.has(i.id)); n=shown.length;
+  const vis=shown.filter(i=>{ const sx=(i.x-cam.x)*cam.z+W/2, sy=(i.y-cam.y)*cam.z+H/2, r=radius(i)*cam.z;
     return sx>r*.3 && sx<W-r*.3 && sy>70 && sy<H-90; }).length;
   if(vis<Math.max(1,Math.ceil(n*.6)) || cam.z<.25) fitAll(true);
 }
@@ -1658,7 +1696,7 @@ function showMissed(list){
   c.querySelector('[data-a=see]').onclick=()=>{ closeCard(c); goTo(list[0][0].id,true); };
   alertsEl.prepend(c);
 }
-function goTo(id,openIt){ const i=byId(id); if(!i) return; if(current) close(); togglePrefs(false);
+function goTo(id,openIt){ const i=byId(id); if(!i) return; reveal(id); if(current) close(); togglePrefs(false);
   animateTo(i.x,i.y,Math.max(cam.z,1),600); setTimeout(()=>{ flash(i.id); if(openIt) open(i.id); },650); }
 function sysNotify(i,t,a){
   try{
@@ -1886,7 +1924,7 @@ function paintFind(){
     b.innerHTML=`<i style="background:${effColor(i)};box-shadow:0 0 8px ${effColor(i)}"></i><div style="min-width:0"><div class="t"></div><small></small></div>`;
     b.querySelector('.t').textContent=i.title||'Sans titre';
     b.querySelector('small').textContent=why||(p?'Branche de '+(p.title||'Sans titre'):'Idée principale');
-    b.onclick=()=>{ toggleFind(false); animateTo(i.x,i.y,Math.max(cam.z,1),600); setTimeout(()=>flash(i.id),520); };
+    b.onclick=()=>{ toggleFind(false); reveal(i.id); animateTo(i.x,i.y,Math.max(cam.z,1),600); setTimeout(()=>flash(i.id),520); };
     findRes.appendChild(b); });
 }
 function flash(id){ const n=nodes.get(id); if(!n) return; n.el.classList.remove('hl'); void n.el.offsetWidth; n.el.classList.add('hl'); setTimeout(()=>n.el.classList.remove('hl'),1700); }
